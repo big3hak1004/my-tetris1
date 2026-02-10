@@ -100,7 +100,7 @@
         const osc = audioCtx.createOscillator();
         const gain = audioCtx.createGain();
         osc.type = 'sine';
-        osc.frequency.setValueAtTime(100, audioCtx.currentTime); // 낮은 주파수
+        osc.frequency.setValueAtTime(200, audioCtx.currentTime); // 낮은 주파수
         osc.frequency.exponentialRampToValueAtTime(30, audioCtx.currentTime + 0.1);
         gain.gain.setValueAtTime(0.5, audioCtx.currentTime);
         gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.1);
@@ -276,4 +276,5 @@
     });
 </script>
 </body>
+
 </html>
