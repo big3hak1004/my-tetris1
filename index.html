@@ -3,45 +3,42 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Cyber Neon Tetris Mobile</title>
+    <title>Cyber Neon Tetris Mobile - Final</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap');
         
         body { 
             background: #050508; color: #00ffff; font-family: 'Orbitron', sans-serif; 
             margin: 0; padding: 0; display: flex; flex-direction: column; align-items: center; 
-            min-height: 100vh; overflow: hidden; touch-action: none; /* 브라우저 기본 제스처 방지 */
+            min-height: 100vh; overflow: hidden; touch-action: none;
         }
 
-        /* 헤더 및 점수 */
         .header { width: 100%; display: flex; justify-content: space-around; align-items: center; padding: 15px 0; z-index: 10; }
         #score-box { font-size: 20px; font-weight: bold; text-shadow: 0 0 10px #00ffff; }
 
-        /* 게임 메인 레이아웃 */
         .game-container { position: relative; display: flex; flex-direction: row; gap: 10px; align-items: flex-start; }
         canvas#tetris { background: #000; border: 2px solid #00ffff; box-shadow: 0 0 15px rgba(0, 255, 255, 0.4); border-radius: 8px; width: 65vw; height: auto; }
         
         .side-panel { display: flex; flex-direction: column; gap: 10px; }
-        canvas#next { background: #000; border: 1px solid #00ffff; border-radius: 5px; width: 80px; height: 80px; }
+        canvas#next { background: #000; border: 1px solid #00ffff; border-radius: 5px; width: 70px; height: 70px; }
 
-        /* 모바일 컨트롤러 */
+        /* 컨트롤러: 2행 3열 구조로 변경하여 아래 방향키 추가 */
         .controls { 
-            display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; 
-            width: 90%; max-width: 400px; margin: 20px 0; padding-bottom: 20px;
+            display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; 
+            width: 95%; max-width: 400px; margin: 15px 0; padding-bottom: 20px;
         }
         .btn {
             background: rgba(0, 255, 255, 0.1); border: 2px solid #00ffff; color: #00ffff;
-            padding: 20px 0; font-size: 24px; font-weight: bold; border-radius: 12px;
+            padding: 18px 0; font-size: 22px; font-weight: bold; border-radius: 12px;
             text-align: center; cursor: pointer; user-select: none;
             -webkit-tap-highlight-color: transparent;
         }
         .btn:active { background: rgba(0, 255, 255, 0.5); transform: scale(0.95); }
-        .btn-drop { grid-column: span 3; padding: 12px; font-size: 16px; background: rgba(0, 255, 255, 0.2); }
+        .btn-drop { grid-column: span 3; padding: 10px; font-size: 14px; background: rgba(0, 255, 255, 0.2); margin-top: 5px; }
 
-        /* 오버레이 */
         #overlay {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.8); display: flex; flex-direction: column;
+            background: rgba(0,0,0,0.85); display: flex; flex-direction: column;
             justify-content: center; align-items: center; z-index: 100;
         }
         #startBtn { 
@@ -69,10 +66,11 @@
 </div>
 
 <div class="controls">
+    <div class="btn" id="btnRotate" style="grid-column: span 3;">↻ ROTATE</div>
     <div class="btn" id="btnLeft">←</div>
-    <div class="btn" id="btnRotate">↻</div>
+    <div class="btn" id="btnDown">↓</div>
     <div class="btn" id="btnRight">→</div>
-    <div class="btn btn-drop" id="btnDrop">HARD DROP</div>
+    <div class="btn btn-drop" id="btnHardDrop">HARD DROP (강제 낙하)</div>
 </div>
 
 <script>
@@ -87,14 +85,29 @@
 
     let audioCtx, bgm, paused = true;
 
+    // 사운드 시스템 초기화
     function initAudio() {
         if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         if (audioCtx.state === 'suspended') audioCtx.resume();
         if (!bgm) {
             bgm = new Audio('https://ia800504.us.archive.org/33/items/TetrisThemeMusic/Tetris.mp3');
-            bgm.loop = true; bgm.volume = 0.2;
+            bgm.loop = true; bgm.volume = 0.15;
         }
         bgm.play();
+    }
+
+    // 블록 삭제 효과음 (요청 사항)
+    function playClearSound() {
+        if (!audioCtx) return;
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(150, audioCtx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(600, audioCtx.currentTime + 0.1);
+        gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+        osc.connect(gain); gain.connect(audioCtx.destination);
+        osc.start(); osc.stop(audioCtx.currentTime + 0.3);
     }
 
     function createPiece(type) {
@@ -105,18 +118,6 @@
         if (type === 'Z') return [[5, 5, 0], [0, 5, 5], [0, 0, 0]];
         if (type === 'S') return [[0, 6, 6], [6, 6, 0], [0, 0, 0]];
         if (type === 'T') return [[0, 7, 0], [7, 7, 7], [0, 0, 0]];
-    }
-
-    function drawBlock(x, y, colorCode, ctx) {
-        const hue = (colorCode * 50) % 360;
-        ctx.save();
-        ctx.translate(x, y);
-        ctx.fillStyle = `hsl(${hue}, 100%, 50%)`;
-        ctx.fillRect(0.1, 0.1, 0.8, 0.8);
-        ctx.strokeStyle = 'white';
-        ctx.lineWidth = 0.05;
-        ctx.strokeRect(0.1, 0.1, 0.8, 0.8);
-        ctx.restore();
     }
 
     const arena = Array.from({length: 20}, () => new Array(10).fill(0));
@@ -148,17 +149,20 @@
     }
 
     function arenaSweep() {
-        let count = 0;
+        let cleared = false;
         for (let y = arena.length - 1; y >= 0; --y) {
             if (arena[y].every(v => v !== 0)) {
                 const row = arena.splice(y, 1)[0].fill(0);
                 arena.unshift(row);
                 y++;
                 player.score += 100;
-                count++;
+                cleared = true;
             }
         }
-        scoreElement.innerText = player.score;
+        if (cleared) {
+            playClearSound(); // 사운드 재생
+            scoreElement.innerText = player.score;
+        }
     }
 
     function playerReset() {
@@ -184,6 +188,18 @@
         dropCounter = 0;
     }
 
+    function drawBlock(x, y, colorCode, ctx) {
+        const hue = (colorCode * 50) % 360;
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.fillStyle = `hsl(${hue}, 100%, 50%)`;
+        ctx.fillRect(0.1, 0.1, 0.8, 0.8);
+        ctx.strokeStyle = 'white';
+        ctx.lineWidth = 0.05;
+        ctx.strokeRect(0.1, 0.1, 0.8, 0.8);
+        ctx.restore();
+    }
+
     function draw() {
         context.fillStyle = '#000';
         context.fillRect(0, 0, canvas.width, canvas.height);
@@ -206,33 +222,35 @@
         requestAnimationFrame(update);
     }
 
-    // 터치 컨트롤 핸들러
+    // 버튼 동작 정의
     const handleAction = (action) => {
         if (paused) return;
         if (action === 'left') { player.pos.x--; if (collide(arena, player)) player.pos.x++; }
         if (action === 'right') { player.pos.x++; if (collide(arena, player)) player.pos.x--; }
+        if (action === 'down') { playerDrop(); } // 방향키 아래 수동 이동 추가
         if (action === 'rotate') { 
             const pre = player.pos.x; rotate(player.matrix);
             if (collide(arena, player)) player.pos.x = pre; 
         }
-        if (action === 'drop') {
+        if (action === 'hardDrop') {
             while (!collide(arena, player)) player.pos.y++;
             player.pos.y--; merge(arena, player); playerReset(); arenaSweep();
         }
         draw();
     };
 
-    // 이벤트 리스너 (터치/클릭 모두 대응)
-    const addEvents = (id, action) => {
-        const el = document.getElementById(id);
-        el.addEventListener('touchstart', (e) => { e.preventDefault(); handleAction(action); });
-        el.addEventListener('mousedown', (e) => { handleAction(action); });
+    // 터치 및 마우스 이벤트 리스너 등록
+    const registerEvent = (id, action) => {
+        const btn = document.getElementById(id);
+        btn.addEventListener('touchstart', (e) => { e.preventDefault(); handleAction(action); });
+        btn.addEventListener('mousedown', (e) => { e.preventDefault(); handleAction(action); });
     };
 
-    addEvents('btnLeft', 'left');
-    addEvents('btnRight', 'right');
-    addEvents('btnRotate', 'rotate');
-    addEvents('btnDrop', 'drop');
+    registerEvent('btnLeft', 'left');
+    registerEvent('btnRight', 'right');
+    registerEvent('btnDown', 'down');
+    registerEvent('btnRotate', 'rotate');
+    registerEvent('btnHardDrop', 'hardDrop');
 
     document.getElementById('startBtn').addEventListener('click', () => {
         initAudio();
