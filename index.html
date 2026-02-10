@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Cyber Neon Tetris Mobile - Final</title>
+    <title>Cyber Neon Tetris - Sound Enhanced</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap');
         
@@ -22,7 +22,6 @@
         .side-panel { display: flex; flex-direction: column; gap: 10px; }
         canvas#next { background: #000; border: 1px solid #00ffff; border-radius: 5px; width: 70px; height: 70px; }
 
-        /* 컨트롤러: 2행 3열 구조로 변경하여 아래 방향키 추가 */
         .controls { 
             display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; 
             width: 95%; max-width: 400px; margin: 15px 0; padding-bottom: 20px;
@@ -85,7 +84,6 @@
 
     let audioCtx, bgm, paused = true;
 
-    // 사운드 시스템 초기화
     function initAudio() {
         if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         if (audioCtx.state === 'suspended') audioCtx.resume();
@@ -96,7 +94,21 @@
         bgm.play();
     }
 
-    // 블록 삭제 효과음 (요청 사항)
+    // [추가] 바닥에 닿을 때 나는 묵직한 효과음
+    function playDropSound() {
+        if (!audioCtx) return;
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(100, audioCtx.currentTime); // 낮은 주파수
+        osc.frequency.exponentialRampToValueAtTime(30, audioCtx.currentTime + 0.1);
+        gain.gain.setValueAtTime(0.5, audioCtx.currentTime);
+        gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.1);
+        osc.connect(gain); gain.connect(audioCtx.destination);
+        osc.start(); osc.stop(audioCtx.currentTime + 0.1);
+    }
+
+    // 블록 삭제 효과음
     function playClearSound() {
         if (!audioCtx) return;
         const osc = audioCtx.createOscillator();
@@ -160,7 +172,7 @@
             }
         }
         if (cleared) {
-            playClearSound(); // 사운드 재생
+            playClearSound();
             scoreElement.innerText = player.score;
         }
     }
@@ -182,6 +194,7 @@
         if (collide(arena, player)) {
             player.pos.y--;
             merge(arena, player);
+            playDropSound(); // 바닥 착지 시 사운드 재생
             playerReset();
             arenaSweep();
         }
@@ -222,24 +235,26 @@
         requestAnimationFrame(update);
     }
 
-    // 버튼 동작 정의
     const handleAction = (action) => {
         if (paused) return;
         if (action === 'left') { player.pos.x--; if (collide(arena, player)) player.pos.x++; }
         if (action === 'right') { player.pos.x++; if (collide(arena, player)) player.pos.x--; }
-        if (action === 'down') { playerDrop(); } // 방향키 아래 수동 이동 추가
+        if (action === 'down') { playerDrop(); }
         if (action === 'rotate') { 
             const pre = player.pos.x; rotate(player.matrix);
             if (collide(arena, player)) player.pos.x = pre; 
         }
         if (action === 'hardDrop') {
             while (!collide(arena, player)) player.pos.y++;
-            player.pos.y--; merge(arena, player); playerReset(); arenaSweep();
+            player.pos.y--; 
+            merge(arena, player); 
+            playDropSound(); // 강제 낙하 시에도 착지 사운드 재생
+            playerReset(); 
+            arenaSweep();
         }
         draw();
     };
 
-    // 터치 및 마우스 이벤트 리스너 등록
     const registerEvent = (id, action) => {
         const btn = document.getElementById(id);
         btn.addEventListener('touchstart', (e) => { e.preventDefault(); handleAction(action); });
